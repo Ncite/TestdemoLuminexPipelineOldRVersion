@@ -1,0 +1,754 @@
+---
+#title: "QC report (summaryList)"
+author: "Ncite Da Camara"
+date: "02/05/2022"
+output: html_document
+tables: true
+fontsize: 12pt
+---
+
+```{r, echo=FALSE, results='asis'}
+title_var <- sprintf("%s: QC report (summaryList)", investigation)
+```
+
+---
+title: "`r title_var`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+#Attach R package
+library(tidyverse)
+library(magrittr)
+library(kableExtra)
+```
+
+```{r, echo=FALSE}
+#Load the summary list report (i.e., "summaryList.RData")
+load("../output/summaryList.RData")
+```
+# Date
+```{r, echo=FALSE, results='asis'}
+a <- date()
+```
+
+Date: `r paste(a)`
+
+
+# Run time {#runtime}
+```{r, echo=FALSE, results='asis'}
+a <- summaryList$RunTime
+aa <- print(summaryList$RunTime)
+aa <- attr(aa, "units")
+```
+
+Elapse time.
+The demoLuminexPipline took `r paste(a, aa, sep = " ")` to run.
+
+# Expected vs Observed {#expvsobs}
+
+**Kits**
+
+```{r, echo=FALSE, results='asis'}
+# Expected vs Observed kits
+number_kits <- nrow(summaryList$Kits)
+```
+There were `r number_kits` kits in this experiment.
+
+This table lists the kit names provided and the kit names observed in the data files.
+Please check for discrepancies.
+
+In most cases, discrepancies are as a result of incorrectly typed file name.
+For example, leaving out the letter "K" at the end of the kit name "HCYTOMAG60" 
+that should be "HCYTOMAG60K" or not providing the underscore between kit name 
+and additional information, i.e., "HCYTOMAG60K_RANTES" entered as 
+"HCYTOMAG60KRANTES".
+
+```{r kits expected vs observed, echo=FALSE, results='asis'}
+# knitr::kable(summaryList$Kits, caption = "Kits expected vs observed.") %>% 
+#   kable_styling(full_width = FALSE, position = "left")
+
+summaryList$Kits %>% 
+  knitr::kable(caption = "Kits expected vs observed.") %>% 
+  kableExtra::kable_styling(full_width = FALSE, position = "left")  %>% 
+  kableExtra::column_spec(1, color = "black", background = ifelse(is.na(summaryList$Kits$kits_provided) == "TRUE", "red", "white"))  %>% 
+  kableExtra::column_spec(2, color = "black", background = ifelse(is.na(summaryList$Kits$kits_in_filenames) == "TRUE", "red", "white"))
+
+number_kits <- nrow(summaryList$Kits)
+```
+
+**Files**
+
+The table is used to check that the expected number of folders and files is received from the data owner and loaded. 
+
+The observed number of folders and files is what is in the input data folder.
+The dta_files variable is derived from the file names after the raw Luminex data were imported.
+Please check for discrepancies.
+```{r files, echo=FALSE, results='asis'}
+#Compare the expected vs observed number of folders and files.
+A <- identical(summaryList$Files$file_numbers$exp_folders, summaryList$Files$file_numbers$obs_folders)
+B <- identical(summaryList$Files$file_numbers$exp_nr_of_files, summaryList$Files$file_numbers$obs_nr_of_files)
+C <- identical(summaryList$Files$file_numbers$exp_nr_of_plates, summaryList$Files$file_numbers$obs_nr_of_plates)
+
+for (i in 1:length(summaryList$Files$file_numbers$exp_folders)){
+  A[i] <- identical(
+    summaryList$Files$file_numbers$exp_folders[i], 
+    summaryList$Files$file_numbers$obs_folders[i]
+  )
+} 
+
+for (i in 1:length(summaryList$Files$file_numbers$exp_nr_of_files)){
+  B[i] <- identical(
+    summaryList$Files$file_numbers$exp_nr_of_files[i], 
+    summaryList$Files$file_numbers$obs_nr_of_files[i]
+  )
+}
+
+for (i in 1:length(summaryList$Files$file_numbers$exp_nr_of_plates)){
+  C[i] <- identical(
+    summaryList$Files$file_numbers$exp_nr_of_plates[i], 
+    summaryList$Files$file_numbers$obs_nr_of_plates[i]
+  )
+}
+
+B <- summaryList$Files$file_numbers %>% 
+  mutate(identical_folders = A) %>% 
+  mutate(identical_nr_of_files = B) %>% 
+  mutate(identical_nr_of_plates = C) 
+
+B <- tibble(
+  object = B
+)
+
+#cell (only cell of the identical column colored in).
+df <- B$object 
+
+sum_char <- function(x){
+  x <- as.integer(x)
+  x <- sum(x)
+  return(as.character(x))
+}
+
+
+df2 <- tibble(
+  exp_folders = "Total", 
+  exp_nr_of_files = sum_char(df$exp_nr_of_files), 
+  exp_nr_of_plates = sum_char(df$exp_nr_of_files), 
+  obs_folders = "---", 
+  obs_nr_of_files = sum_char(df$obs_nr_of_files),
+  obs_nr_of_plates = sum_char(df$obs_nr_of_plates), 
+  identical_folders = "---", 
+  identical_nr_of_files = "---",
+  identical_nr_of_plates = "---"
+)
+
+df <- df %>%
+  mutate_all(as.character)
+
+df <- bind_rows(df, df2)
+
+
+df %>% 
+  mutate(
+    identical_folders = kableExtra::cell_spec(
+      df$identical_folders, 
+      color = "black", 
+      background = 
+        ifelse(
+          df$identical_folders == 
+            "FALSE",
+          "red",
+          "green")),
+    identical_nr_of_files = kableExtra::cell_spec(
+      df$identical_nr_of_files, color = "black", 
+      background = 
+        ifelse(
+          df$identical_nr_of_files == 
+            "FALSE",
+          "red",
+          "green")),
+    identical_nr_of_plates = kableExtra::cell_spec(
+      df$identical_nr_of_plates, color = "black", 
+      background = 
+        ifelse(
+          df$identical_nr_of_plates == 
+            "FALSE",
+          "red",
+          "green")
+    )) %>% 
+  kable(escape = F, booktabs = T, caption = 
+          "Compare the pre-processed QC Luminex data set to the expected 
+        meta dataset.", align = "lrrlrrccc") %>%
+  kableExtra::kable_styling(full_width = TRUE, position = "right") %>% 
+  # Format last row:
+  row_spec(nrow(df), color = "black", bold = TRUE)
+
+#OR row (entire row green)
+# B$object %>% 
+#   knitr::kable(caption = "Compare the pre-processed QC Luminex data set to the expected meta dataset.") %>%
+#   kableExtra::kable_styling(full_width = TRUE, position = "left") %>% 
+#   kableExtra::row_spec(1:nrow(B), color = "black", background = 
+#                               ifelse(B$object$identical == "FALSE",
+#                                      "red",
+#                                      "green")
+#   )
+```
+**New analyte names**
+
+New analyte names that are present in the raw Luminex data and not present in the analyte reference table (i.e., "analyte_synonyms.csv").
+These new analyte names should be added to the analyte reference table (i.e., "analyte_synonyms.csv") after they have been assessed and approved by the Bioinformatics group investigators.
+
+```{r}
+tmp <- summaryList$not_in_analyte_ref
+
+if(!is.null(tmp)){
+  tmp <- tibble(
+  new_analyte_names <- summaryList$not_in_analyte_ref
+)
+
+tmp %>% 
+  knitr::kable(caption = "New analyte names that should be added to the analyte reference table (i.e., analyte_synonyms.csv).") %>%
+  kableExtra::kable_styling(full_width = TRUE, position = "left")
+} else{
+  print("No new analyte names identified in the raw Luminex data that is not in the analyte reference table.")
+}
+
+```
+**Description**
+
+```{r}
+#Total description
+tmp <- tibble(
+    total_description = summaryList$Description$Total_description
+)
+
+  tmp %>% 
+  knitr::kable(caption = "Total unique descriptions (i.e., specimen ID's) in the raw Luminex data.") %>%
+  kableExtra::kable_styling(full_width = TRUE, position = "left") %>% 
+  # Format last row:
+  row_spec(nrow(tmp), color = "black", bold = TRUE)
+
+
+#Description
+tmp <- tibble(
+  unique_description = summaryList$Description$Unique_description
+)
+
+tmp %>% 
+  knitr::kable(caption = "Unique descriptions (i.e., specimen ID's) in the raw Luminex data.") %>%
+  kableExtra::kable_styling(full_width = TRUE, position = "left")
+
+
+```
+
+
+**Experiment design**
+
+**Total number of unknown specimens (i.e., X) per analyte, per kit and per plate**
+
+The table shows the total number of unknown specimens (i.e., X) per analyte, per kit and per plate number.
+
+The table also used to visualise missing unknown specimens per analyte, per kit and per plate.
+
+On average we expect 74-76 number of measurements for the unknown specimens [excluding the Blanks (B), Controls (IQC1, IQC2, and IQC3) and Standards (S)].
+If you see any entries differing from this, please discuss with the data analyst.
+
+```{r experimentdesign, echo=FALSE, results='asis'}
+
+# summaryList$Missingness$Xwells_per_kit_per_plate_table %>% 
+#   arrange(kitname) %>% 
+#   knitr::kable(caption = "Total number of unknown specimen per analyte, per kit and per plate.") %>% 
+#   kable_styling(full_width = FALSE, position = "left")
+
+
+#Create vector of "summaryList".
+C <- summaryList
+
+#Create vector the list "Kits" in "summaryList".
+C <- C$Kits
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+C <- tibble(C)
+
+#Filter for NA elemnts in "kits_provided" variable.
+C <- C %>% filter(is.na(C$kits_provided) == "TRUE")
+
+#Add a new variable called "is_na" to indicate boolean "TRUE" if NA.
+C <- C %>%
+  mutate(is_na = is.na(C$kits_provided))
+
+#Rename tie column from "kits_in_filenames" to "kitname" 
+#to resemble the column name in the other tibble 
+#called "D <- summaryList$Kits_Analytes$Total_plates_per_kit". 
+#Since these two tibbles will be joined.
+
+C <- rename(C, kitname = kits_in_filenames)
+
+#Create a new vector calles "D" from the emelents in the "summaryList" list.
+D <- summaryList$Missingness$Xwells_per_kit_per_plate_table
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+D <- tibble(D)
+
+#Join the two tibbles by "kitname".
+DC <- left_join(D, C)
+
+#Remove "kits_provided" variable.
+DC <- DC %>% select(-kits_provided)
+
+#Add boolean value to "is_na" variable (i.e., "FALSE" or "TRUE") to distinguish
+#between NA or not, i.e., if the kit name in the "kitname" variable is correct 
+#or has a error (i.e., "FALSE" if the kit name is correct and "TRUE" if the 
+#kit name has an error).
+DC <- DC %>%
+  mutate(is_na = ifelse(is.na(is_na), "FALSE", "TRUE"))
+
+#Create a table that will summarise the "Total number of unknown specimen per analyte, per kit and per plate.".
+#In addition, generate red cells for the rows containing kit names with errors.
+DC %>% 
+  knitr::kable(caption = "Total number of unknown specimen per analyte, per kit and per plate.") %>% 
+  kableExtra::kable_styling(full_width = FALSE, position = "left")  %>% 
+  kableExtra::column_spec(1:ncol(DC), color = "black", background = ifelse(DC$is_na == "TRUE", "red", "white"))
+
+```
+**NB! Please check before doing analyses**
+
+Please check the missingness in the table and if it is what you expect.
+
+Missingness can be due to a whole plate failing laboratory QC or analyte name or kit name capture error.
+
+```{r experimentdesign02, echo=FALSE, results='asis'}
+
+# tbl <- summaryList$Missingness$Xwells_per_kit_per_plate_table %>% 
+#   arrange(kitname)
+# 
+# tbl <- tbl %>% 
+#   anti_join(tbl[complete.cases(tbl),])
+# 
+# 
+# tbl %>% 
+#   knitr::kable(caption = "Total number of unknown specimen per analyte, per kit and per plate.") %>% 
+#   kable_styling(full_width = FALSE, position = "left")
+```
+
+**Example**
+
+**There can be different scenarios for example:**
+
+1. Two analytes with the same name, but different kit names, and measurements not on all the plates (Example 1).
+
+2. The analyte name is different (i.e., spelling different), however have the same kit name, and measurements not on all the plates (Example 2).
+Please see example data below. 
+
+3. Manufacturer error. For example, error made by the manufacturer including the wrong analyte in the kit (e.g., "il6" and "il6r") (Example 3). 
+
+```{r example1, echo=FALSE, results='asis'}
+#For example
+
+df <- tibble::tibble(
+analyte_new = c("ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3", "ccl3"),
+kitname = c("R&D5plex", "R&D5plex", "R&D5plex", "R&D5plex", "R&D5plex", "R&D5plex", "R&D5plex", "R&D5plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex"),
+plate = c("1", "2", "3", "4", "5", "6", "7", "8", "1", "2", "3", "4", "5", "6", "7", "8"),
+values = c(NA, NA, NA, NA, "73", "71", NA, NA, "72", "73", "72", "71", NA, NA, "73", "73")
+)
+
+pivot_wider(df, names_from = plate, values_from = values) %>% 
+  knitr::kable(caption = "Example1. Total number of unknown specimen per analyte, per kit and per plate.") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+
+```
+
+```{r example2, echo=FALSE, results='asis'}
+#For example
+
+df <- tibble::tibble(
+analyte_new = c("cd40", "cd40", "cd40", "cd40", "cd40", "cd40", "cd40", "cd40", "cd40lg", "cd40lg", "cd40lg", "cd40lg", "cd40lg", "cd40lg", "cd40lg", "cd40lg"),
+kitname = c("R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex"),
+plate = c("1", "2", "3", "4", "5", "6", "7", "8", "1", "2", "3", "4", "5", "6", "7", "8"),
+values = c("72", "73", "72", "71", NA, NA, "73", "73", NA, NA, NA, NA, "73", "71", NA, NA)
+)
+
+pivot_wider(df, names_from = plate, values_from = values) %>% 
+  knitr::kable(caption = "Example2. Total number of unknown specimen per analyte, per kit and per plate.") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+
+```
+
+
+```{r example3, echo=FALSE, results='asis'}
+#For example
+
+df <- tibble::tibble(
+analyte_new = c("il6", "il6", "il6", "il6", "il6", "il6", "il6", "il6", "il6r", "il6r", "il6r", "il6r", "il6r", "il6r", "il6r", "il6r"),
+kitname = c("R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex", "R&D22plex"),
+plate = c("1", "2", "3", "4", "5", "6", "7", "8", "1", "2", "3", "4", "5", "6", "7", "8"),
+values = c(NA, NA, NA, NA, "73", "71", NA, NA, "72", "73", "72", "71", NA, NA, "73", "73")
+)
+
+pivot_wider(df, names_from = plate, values_from = values) %>% 
+  knitr::kable(caption = "Example3. Total number of unknown specimen per analyte, per kit and per plate.") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+
+```
+
+If you see any entries differing from this, please discuss with the data analyst.
+
+**Total distinct analytes used in the study**
+```{r totalanalytesusedinthestudy, echo=FALSE}
+#Total distinct analytes used in the study.
+b <- summaryList$Kits_Analytes$Total_analytes_used_in_the_study
+
+#Total analytes used in the study
+#Important, the total number of analytes in the table may differ from the
+#total number of analytes in the data. A reason is that the same analyte or 
+#an analyte with the same name is present in different kits.
+c <- sum(summaryList$Kits_Analytes$Total_analytes_per_kit$analytecount)
+```
+
+The total number of distinct analytes in the data was **`r b` analytes** and
+the total analytes used in the study is **`r c` analytes**.
+
+If this is not as expected please contact the data analyst.
+
+**Total analytes per kit**
+
+The table shows the total number of analytes per kit in the data.
+
+Important, the total number of analytes in the table may differ from the
+total number of distinct analytes in the data. A reason is that the same analyte 
+or an analyte with the same name is present in different kits.
+
+If this is not as expected please contact the data analyst.
+```{r totalanalytesperkit, echo=FALSE, results='asis'}
+# knitr::kable(summaryList$Kits_Analytes$Total_analytes_per_kit, caption = "Total analytes per kit.")  %>% 
+#   kable_styling(full_width = FALSE, position = "left")
+
+#Create vector of "summaryList".
+C <- summaryList
+
+#Create vector the list "Kits" in "summaryList".
+C <- C$Kits
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+C <- tibble(C)
+
+#Filter for NA elemnts in "kits_provided" variable.
+C <- C %>% filter(is.na(C$kits_provided) == "TRUE")
+
+#Add a new variable called "is_na" to indicate boolean "TRUE" if NA.
+C <- C %>%
+  mutate(is_na = is.na(C$kits_provided))
+
+#Rename tie column from "kits_in_filenames" to "kitname" 
+#to resemble the column name in the other tibble 
+#called "D <- summaryList$Kits_Analytes$Total_plates_per_kit". 
+#Since these two tibbles will be joined.
+
+C <- rename(C, kitname = kits_in_filenames)
+
+#Create a new vector calles "D" from the emelents in the "summaryList" list.
+D <- summaryList$Kits_Analytes$Total_analytes_per_kit
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+D <- tibble(D)
+
+#Join the two tibbles by "kitname".
+DC <- left_join(D, C)
+
+#Remove "kits_provided" variable.
+DC <- DC %>% select(-kits_provided)
+
+#Add boolean value to "is_na" variable (i.e., "FALSE" or "TRUE") to distinguish
+#between NA or not, i.e., if the kit name in the "kitname" variable is correct 
+#or has a error (i.e., "FALSE" if the kit name is correct and "TRUE" if the 
+#kit name has an error).
+DC <- DC %>%
+  mutate(is_na = ifelse(is.na(is_na), "FALSE", "TRUE"))
+
+DC2 <- tibble(
+  kitname = "Total", 
+  analytecount = sum(DC[,2]),
+  is_na = "---"
+)
+
+DC <- DC %>%
+  mutate_all(as.character)
+
+DC2 <- DC2 %>%
+  mutate_all(as.character)
+
+DC <- bind_rows(DC, DC2)
+
+#Create a table that will summarise the "Total analytes per kit.".
+#In addition, generate red cells for the rows containing kit names with errors.
+DC %>% 
+  knitr::kable(caption = "Total analytes per kit.", align = "lrc") %>% 
+  kableExtra::kable_styling(full_width = FALSE, position = "left")  %>% 
+  kableExtra::column_spec(1:ncol(DC), color = "black", background = ifelse(DC$is_na == "TRUE", "red", "white")) %>% 
+  # Format last row:
+  row_spec(nrow(DC), color = "black", bold = TRUE)
+```
+
+**Total plates per kit and instrument**
+```{r}
+c <- unique(summaryList$Kits_Analytes$Total_plates_per_kit$instrumentname)
+```
+
+See table to view the number of plates per kit and instrument (i.e., `r c`) in the data.
+
+If this is not as expected please contact the data analyst.
+```{r totalplatesperkitandinstrument, echo=FALSE, results='asis'}
+# knitr::kable(summaryList$Kits_Analytes$Total_plates_per_kit, caption = "Total plates per kit and instrument.")  %>% 
+#   kable_styling(full_width = FALSE, position = "left")
+
+#Create vector of "summaryList".
+C <- summaryList
+
+#Create vector the list "Kits" in "summaryList".
+C <- C$Kits
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+C <- tibble(C)
+
+#Filter for NA elemnts in "kits_provided" variable.
+C <- C %>% filter(is.na(C$kits_provided) == "TRUE")
+
+#Add a new variable called "is_na" to indicate boolean "TRUE" if NA.
+C <- C %>%
+  mutate(is_na = is.na(C$kits_provided))
+
+#Rename tie column from "kits_in_filenames" to "kitname" 
+#to resemble the column name in the other tibble 
+#called "D <- summaryList$Kits_Analytes$Total_plates_per_kit". 
+#Since these two tibbles will be joined.
+
+C <- rename(C, kitname = kits_in_filenames)
+
+#Create a new vector calles "D" from the emelents in the "summaryList" list.
+D <- summaryList$Kits_Analytes$Total_plates_per_kit
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+D <- tibble(D)
+
+#Join the two tibbles by "kitname".
+DC <- left_join(D, C)
+
+#Remove "kits_provided" variable.
+DC <- DC %>% select(-kits_provided)
+
+#Add boolean value to "is_na" variable (i.e., "FALSE" or "TRUE") to distinguish
+#between NA or not, i.e., if the kit name in the "kitname" variable is correct 
+#or has a error (i.e., "FALSE" if the kit name is correct and "TRUE" if the 
+#kit name has an error).
+DC <- DC %>%
+  mutate(is_na = ifelse(is.na(is_na), "FALSE", "TRUE"))
+
+DC2 <- tibble(
+  instrumentname = "Total",
+  kitname = "---",
+  platecount = sum(DC[,3]),
+  is_na = "---"
+)
+
+DC <- DC %>%
+  mutate_all(as.character)
+
+DC2 <- DC2 %>%
+  mutate_all(as.character)
+
+DC <- bind_rows(DC, DC2)
+
+#Create a table that will summarise the "Total plates per kit and instrument."
+#In addition, generate red cells for the rows containing kit names with errors.
+DC %>% 
+  knitr::kable(caption = "Total plates per kit and instrument.", align = "llrc") %>% 
+  kableExtra::kable_styling(full_width = FALSE, position = "left")  %>% 
+  kableExtra::column_spec(1:ncol(DC), color = "black", background = ifelse(DC$is_na == "TRUE", "red", "white")) %>% 
+  # Format last row:
+  row_spec(nrow(DC), color = "black", bold = TRUE)
+```
+**Total analytes per instrument, kit and plate number**
+
+The total number of analytes per instrument, kit and plate number in the data are shown in table. 
+
+If this is not as expected please contact the data analyst.
+
+```{r totalanalytesperinstrumentkitandplatenumber, echo=FALSE, results='asis'}
+# summaryList$Kits_Analytes$Total_analytes_perKit_and_PlateNumber %>% 
+#   arrange(kitname) %>% 
+# knitr::kable(caption = "Total analytes per instrument, kit and plate number.") %>% 
+#   kable_styling(full_width = FALSE, position = "left")
+
+
+#Create vector of "summaryList".
+C <- summaryList
+
+#Create vector the list "Kits" in "summaryList".
+C <- C$Kits
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+C <- tibble(C)
+
+#Filter for NA elemnts in "kits_provided" variable.
+C <- C %>% filter(is.na(C$kits_provided) == "TRUE")
+
+#Add a new variable called "is_na" to indicate boolean "TRUE" if NA.
+C <- C %>%
+  mutate(is_na = is.na(C$kits_provided))
+
+#Rename tie column from "kits_in_filenames" to "kitname" 
+#to resemble the column name in the other tibble 
+#called "D <- summaryList$Kits_Analytes$Total_plates_per_kit". 
+#Since these two tibbles will be joined.
+
+C <- rename(C, kitname = kits_in_filenames)
+
+#Create a new vector calles "D" from the emelents in the "summaryList" list.
+D <- summaryList$Kits_Analytes$Total_analytes_perKit_and_PlateNumber
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+D <- tibble(D)
+
+#Join the two tibbles by "kitname".
+DC <- left_join(D, C)
+
+#Remove "kits_provided" variable.
+DC <- DC %>% select(-kits_provided)
+
+#Add boolean value to "is_na" variable (i.e., "FALSE" or "TRUE") to distinguish
+#between NA or not, i.e., if the kit name in the "kitname" variable is correct 
+#or has a error (i.e., "FALSE" if the kit name is correct and "TRUE" if the 
+#kit name has an error).
+DC <- DC %>%
+  mutate(is_na = ifelse(is.na(is_na), "FALSE", "TRUE"))
+
+#Create a table that will summarise the "Total analytes per instrument, kit and plate number.".
+#In addition, generate red cells for the rows containing kit names with errors.
+DC %>% 
+  knitr::kable(caption = "Total analytes per instrument, kit and plate number.") %>% 
+  kableExtra::kable_styling(full_width = FALSE, position = "left")  %>% 
+  kableExtra::column_spec(1:ncol(DC), color = "black", background = ifelse(DC$is_na == "TRUE", "red", "white"))
+```
+**Visualise missing proportions in the data**
+
+The table provides valuable information on the proportion of missing values according to the type of missing value [i.e., out of range (oor) less than (lt), oor greater than (gt), or true missing] per analyte in the data. The variables (i.e., columns) are labeled "prop_oorlt", "prop_oorgt", and "prop_true_missing", respectively. See table.
+
+If this is not as expected please contact the data analyst.
+
+Additional information is also provided such as the kit name, time point, stimulation condition, and total number of unknown specimens analysed per analyte. The variables are labeled as follows: "kitname", "analyte_new", "timepoint", "stimulation", "total", respectively. See table.
+
+```{r visualisemissingproportionsinthedata, echo=FALSE, results='asis'}
+# knitr::kable(summaryList$Missing$missing_proportions_table, caption = "Visualise missing proportions in the data.")  %>% 
+#   kable_styling(full_width = FALSE, position = "left")
+
+
+#Create vector of "summaryList".
+C <- summaryList
+
+#Create vector the list "Kits" in "summaryList".
+C <- C$Kits
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+C <- tibble(C)
+
+#Filter for NA elemnts in "kits_provided" variable.
+C <- C %>% filter(is.na(C$kits_provided) == "TRUE")
+
+#Add a new variable called "is_na" to indicate boolean "TRUE" if NA.
+C <- C %>%
+  mutate(is_na = is.na(C$kits_provided))
+
+#Rename tie column from "kits_in_filenames" to "kitname" 
+#to resemble the column name in the other tibble 
+#called "D <- summaryList$Kits_Analytes$Total_plates_per_kit". 
+#Since these two tibbles will be joined.
+
+C <- rename(C, kitname = kits_in_filenames)
+
+#Create a new vector calles "D" from the emelents in the "summaryList" list.
+D <- summaryList$Missing$missing_proportions_table
+
+#Transform the vector consisting of the "summaryList" list elements to a tibble.
+D <- tibble(D)
+
+#Join the two tibbles by "kitname".
+DC <- left_join(D, C)
+
+#Remove "kits_provided" variable.
+DC <- DC %>% select(-kits_provided)
+
+#Add boolean value to "is_na" variable (i.e., "FALSE" or "TRUE") to distinguish
+#between NA or not, i.e., if the kit name in the "kitname" variable is correct 
+#or has a error (i.e., "FALSE" if the kit name is correct and "TRUE" if the 
+#kit name has an error).
+DC <- DC %>%
+  mutate(is_na = ifelse(is.na(is_na), "FALSE", "TRUE"))
+
+#Create a table that will summarise the "Visualise missing proportions in the data."
+#In addition, generate red cells for the rows containing kit names with errors.
+DC %>% 
+  knitr::kable(caption = "Visualise missing proportions in the data.") %>% 
+  kableExtra::kable_styling(full_width = FALSE, position = "left")  %>% 
+  kableExtra::column_spec(1:ncol(DC), color = "black", background = ifelse(DC$is_na == "TRUE", "red", "white"))
+
+
+tbl <- tibble::tibble(summaryList$Missing$missing_proportions_table)
+
+tbl <- tbl %>%
+  select(analyte_new, kitname, prop_oorlt, prop_oorgt, prop_true_missing)
+```
+
+**Proportion OOR less than (<) figure**
+```{r}
+ggplot(tbl, aes(prop_oorlt, reorder(analyte_new, prop_oorlt))) +
+geom_col() +
+  labs(y = "Analyte", x = "Proportion OOR <.")
+```
+
+**Proportion OOR greater than (>) figure**
+```{r}
+ggplot(tbl, aes(prop_oorgt, reorder(analyte_new, prop_oorgt))) +
+geom_col() +
+  labs(y = "Analyte", x = "Proportion OOR >.")
+```
+
+**Proportion true missingness figure**
+
+```{r}
+ggplot(tbl, aes(prop_true_missing, reorder(analyte_new, prop_true_missing))) +
+geom_col() +
+  labs(y = "Analyte", x = "Proportion true missingness.")
+```
+
+
+
+# Error log {#errorlog}
+
+**Instrument name errors**
+
+Check if  there are instrument name errors in the data.
+
+If this is not as expected please contact the data analyst.
+
+```{r, echo=FALSE, results='asis'}
+#1. Instrument name errors
+summaryList$InstrumentName_errors
+```
+**Dates**
+
+Incorrectly parsed dates in the data:
+
+```{r, echo=FALSE, results='asis'}
+#2. Dates
+summaryList$Dates$`Incorrectly parsed dates`
+```
+If this is not as expected please contact the data analyst.
+
+# R session information {#rsessioninformation}
+
+```{r}
+summaryList$session_information
+```

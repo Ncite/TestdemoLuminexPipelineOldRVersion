@@ -1,0 +1,1001 @@
+---
+title: "demo_flow_for_thesis"
+author: "Ncite Da Camara"
+date: "08/04/2022"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r demo-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Measure run time.
+#Start time.
+```{r demo-time}
+start_time <- Sys.time()
+```
+# Pipeline configuration
+
+Aim: Generate folders for output data (e.g., a ".rds" folder), 
+set file path for input data, and apply quality control checks along the way. 
+This is done by reading (i.e., source) the R scripts (i.e., code) from 
+two files, namely the "config.R" and "makeMetadata.R" files.
+
+Output: The output for the two files, namely the "config.R" and 
+"makeMetadata.R" files, are as follows:
+
+##"config.R" file:
+First, a ".rds" folder is created in the current working directory.
+Second, set the path to raw Luminex data files and save in an object called: 
+"directory_data" that will be used as the input argument (parameter) for the 
+R functions called in the demoLuminexPipeline (i.e., LuminexPipeline). Please note that the object 
+"directory_data" will be used as the input argument and the output object of 
+the R functions called throughout the demoLuminexPipeline. Therefore, the object 
+"directory_data" will change according to each step’s R functions purpose 
+(accordingly).
+Third, set path to md5sums file and save in an object called: 
+"directory_md5sums".
+Fourth, create a summary list that will serve as the final output report to the
+analyst. The summary list will be saved in an object called "summaryList" and 
+a .RData file called "summaryList.RData".
+Fifth, read in "dataset_project.rds" file from .rds folder, if it exists and 
+save it in an object called: "directory_data" in the R global environment.
+Sixth, set path to metadata files saved in the "rds" folder and read in the 
+metadata files.
+
+1.	Acquire datasets:
+a.	raw Luminex data
+b.	Analyte reference table dataset (i.e., "analyte_synonyms.csv").
+2.	Paths to datasets
+a.	raw Luminex data
+b.	Please note that the raw Luminex data stored in the following ways are 
+accessed and imported into R by the demoLuminexPipeline:
+i.	Multiple files in multiple folders according to kit used, which is the 
+SUN-IRG approach.
+ii.	Multiple files in a single folder (e.g., NexGen).
+c.	Analyte reference table dataset 
+(e.g., the synonym table called: "analyte_synonyms.csv")
+3.	Paths to output files and folders:
+a.	summaryList (report) 
+(i.e., summaryList.RData)
+b.	rds folder
+i.	dataset_project.rds
+ii.	filesInvalid.rds
+iii.listData.rds
+iv. dataset_prtcpt.rds
+v. dataset_qc.rds
+vi. kits_provided_detected.rds
+vii. summaryList.rds
+
+##"makeMetadata.R"
+Currently metadata is made for the example data (i.e., R01AI128765, NexGen, HIV) used 
+to test the demoLuminexPipeline. The R script "makeMetadata.R" is sourced after the 
+above configuration step.
+
+For future use of the demoLuminexPipeline LuminexPipeline the following 
+metadata is required from the laboratory prior to data pre-processing:
+1. Project description (i.e., information about the project)
+2. Manifest: i) plate layout and ii) list of specimens
+3. Analyte description and conversion
+4. Luminex data 
+a. .csv file format and .xlsx file format
+b. Include all the variables
+c. Consist of a standardize file name structure for raw Luminex data without 
+"reruns" (i.e., "KitName_InstrumentName_RunDate_PlateNumber"), 
+e.g., "HCCBP2MAG58K_BP_20180907_03.csv"
+d. Consist of a standardized file name structure for raw Luminex data with 
+"reruns" (i.e., "KitName_InstrumentName_RunDate_PlateNumber_<"Rerun">Number"), 
+e.g., "HCCBP2MAG58K_BP_20180907_03_Rerun01.csv")
+e. Additional descriptive information regarding the basis kit such as a value 
+(number) [plex number, e.g., "15 plex"] and the word "plex" without 
+underscores "_" should be provided 
+(i.e., "KitNamePlexNumber<"plex">_InstrumentName_RunDate_PlateNumber"), 
+e.g., "HCYTOMAG60K15plex_BP_202010309_04.csv".
+5. Clinical data
+6. md5sums file (i.e., md5sums file received from the laboratory for all the 
+exported files).
+7. Data dictionary (i.e., data structure and type expected)
+
+```{r demo-loadlibs}
+#Attach R package.
+#Check if required R packages are installed and loaded.
+#If not, install and load the required R packages.
+installpak <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) {
+    install.packages(new.pkg, dependencies = TRUE)
+  }
+  sapply(pkg, require, character.only = TRUE)
+}
+
+packages <- c('tidyverse', 'devtools', 'glue', 'gsubfn', 'here', 'proto', 'english', 
+              'lubridate', 'magrittr','miceadds', 'openxlsx', 'usethis', 'visdat')
+
+installpak(packages)
+
+
+#Set working directory to "code":
+setwd(here::here("code"))
+getwd()
+```
+
+
+```{r demo-loadlibs}
+#Attach R package.
+source("load_libraries.R")
+library(devtools)
+library(demoLuminexPipeline)
+
+setwd(here("code"))
+
+#Load all R functions (i.e., function definition files).
+#Load a source package into memory (https://r-pkgs.org/package-structure-state.html?q=build#package-states, Accessed: 28 April 2022).
+#load_all()
+#Remove "summaryList.RData" file.
+file.remove("output/summaryList.RData")
+
+
+```
+
+```{r demo-read-config}
+#Source the R scripts (i.e., code) from the 
+#"config.R" and "makeMetadata.R" files.
+source("config_NL.R")
+source("makeMetadata_NL.R")
+metadata <-read_rds("rds/metadata.rds")
+```
+# Pipeline:  Check essential metadata
+
+Aim:  to check that essential metadata was provided. 
+If check passed, pipeline continues. 
+If check fails, pipeline stops with an error message.  
+Output:  
+
+```{r no-op}
+# check all metadata objects -  
+# give immediate error if missing or format wrong
+# STOP - how???
+
+```
+# ---------------------------------------------------------
+
+# Pipeline:  List raw Luminex data files
+
+Aim:  List valid and invalid raw Luminex data files (i.e., text or Excel) from 
+single or multiple file directories. In addition, capture the R version 
+information, the OS, and attached or loaded packages.
+
+Output:  2 RDS files (i.e., .rds).
+1. "listData.rds" file: a list of files or the directories 
+(i.e., folders) under the common top level directory 
+(e.g., called "Text").
+2. "filesInvalid.rds" file: List invalid files.
+As well as a summary list report called "summaryList.RData" that has the
+' R session information of the user.
+
+```{r demo-list-files}
+#Call R function
+files_list_files_in_folders(directory_data)
+```
+
+## Test
+
+```{r demo-tmp-rds}
+tmp <- list.files("rds")
+#The length of the list of files in the rds folder.
+length(tmp)
+#Read .rds files.
+# read_rds(paste("rds/", tmp[1], sep = ""))
+# read_rds(paste("rds/", tmp[2], sep = ""))
+```
+# ---------------------------------------------------------
+
+# Pipeline:  Check kit names in the "filenames" variable
+
+Aim: check kit names in the "filenames" variable by comparing expected kit names 
+(i.e., the standard conventional file name) with the observed kit names in the
+raw Luminex data.
+
+Output: A RDS file (i.e., "rds/kits_provided_detected.rds") and a list called: 
+"summaryList.RData"  containing: Kit names expected 
+(i.e., from the metadata) and the kit names provided 
+(i.e., from the raw Luminex data).
+
+
+```{r demo-checkkit}
+# check kit names in the "filenames" variable - immediate error if expected kit names
+# do not correspond with kit names in the "filenames" variable.
+# STOP - how???
+#Call R function.
+check_kitname_errors(filelist_file = "./rds/listData.rds",
+                     metadataset = metadata$kits$kits_expected)
+#Load list.
+load("./output/summaryList.RData")
+#View kit names in the "Kits" list in "summaryList" report.
+summaryList$Kits
+#Remove "summaryList" report.
+rm("summaryList")
+```
+# --------------------------------------------------------
+
+# Pipeline:  Count the number of folders, files and files per folder of the 
+#            raw Luminex data received.
+
+Aim: Count the number of folders, files and files per folder of the raw Luminex 
+data received.
+
+Output: a list (i.e., Output report called "summaryList.RData") containing:
+#' 1. the expected number of folders,
+#' 2. the expected number of files,
+#' 3. the observed number of folders,
+#' 4. the observed number of files
+
+```{r demo-countfoldersfiles}
+#Call R function.
+files_count_folders_and_files(directory_data,
+                              rds_list = "./rds/listData.rds",
+                              metadata_path = metadata_path)
+#Load list.
+load("./output/summaryList.RData")
+#View "summaryList" report.
+summaryList
+#Remove "summaryList" report.
+rm("summaryList")
+```
+# ----------------------------------------------------------
+
+# Pipeline:  Import raw Luminex data (i.e., unprocessed data)
+
+Aim: Import (i.e., read in) raw Luminex data (i.e., multiple text files) into R 
+from a single directory. Create sub tables of i) average and ii) individual 
+observed concentration values (i.e., "Obs Conc" variable).
+Save and use the individual observed concentration values table as 
+"dataset_project.rds" for further data pre-processing and analyses.
+
+In addition, filter out observations (elements) with no ID's 
+(i.e., Description) and observations with no ID's and with the "Type" 
+of unknown specimen (i.e., X).
+
+Output: RDS file: Save subset data set containing the individual observed 
+concentration (i.e., "Obs Conc" variable) values for the analytes measured in the study in a RDS 
+file called "dataset_project.rds".
+
+```{r demo-readdata}
+#Call R function.
+getwd()
+import_data(directory_data, 
+            dataName = "dataset_project")
+#View a list of .rds files.
+list.files("./rds/")
+#Read .rds file and save as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+```
+# ------------------------------------------------------------
+
+# Pipeline: Check file import
+
+Aim: Check file import. Determine the total number of files in folder.
+Change file name and kit names to lowercase and replace dash with nothing.
+Sort according to kit names.
+
+Output: First, change file names (i.e., elements) in the "FileName" variable of 
+the raw Luminex data to lowercase and replace dash with nothing.
+Second, change kit names in the metadata to lowercase, replace dash with 
+nothing and sort.
+Third, determine the total number of files in folder from the kit names 
+in the metadata.
+
+Output Report: Save the following information in the summary list report 
+(i.e., "summaryList.RData"):
+1. The total number files in folder.
+
+```{r demo-checkimport}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#Call R function
+check_file_import(dataName = dataset_project,
+                  metadata = metadata)
+#Load list
+load("./output/summaryList.RData")
+#View
+summaryList$Files$file_numbers
+#Remove
+rm("summaryList")
+```
+
+# -----------------------------------------------------------
+
+# Pipeline: Fix file name
+
+Aim: Standardise file name to conventional file name of the Luminex data that
+should consist of 4 components (parts) (i.e., "KitName", "InstrumentName",
+"RunDate", "PlateNumber") for example "HCYTOMAG60K_BP_202010309_04". For
+files that do not have a rerun. Alternatively, for files that have a
+rerun ("RERUN") in the file name with or without rerun number (repeats) at
+the end of the file name consist of 5 components (parts) (i.e., "KitName",
+"InstrumentName", "RunDate", "PlateNumber", "RERUN_RERUNNUMBER") for
+example "HCYTOMAG60K_BP_202010309_RERUN_04".
+However, there are cases where the basis kit name and additional
+descriptive information regarding the basis kit such as a value (number)
+and the word "plex" [plex number, e.g., "15 plex"] with and without
+underscores "_" are provided (e.g., "HCYTOMAG60K15plex_BP_202010309_04").
+Please note, the latter should be without underscores
+(e.g., "HCYTOMAG60K15plex_BP_202010309_04").
+
+Output: A .rds file called "dataset_project.rds" and a list (i.e., Output 
+report called "summaryList.RData").
+
+```{r demo-fixfilename}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#Call R function
+fix_filenames(dataName = dataset_project, 
+              col = "FileName")
+#Read .rds (i.e., "dataset_project.rds") file the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#Load list
+load("./output/summaryList.RData")
+#View
+summaryList$FileNames
+#Remove
+rm("summaryList")
+```
+# -----------------------------------------------------------
+
+# Pipeline: Check for the word "rerun" in the file name of the raw Luminex data
+
+Aim: Check for the word "rerun" in the file name structure of the raw Luminex 
+data in the "FileName" variable and Keep distinct rows 
+(i.e., unique observations).
+
+Output: Keep distinct rows (i.e., unique observations) with i) the plate number 
+with the highest rerun value (maximum row) and ii) the plates that were 
+not rerun.
+
+Return a data frame (object) consisting of the plate number with the 
+highest rerun value (maximum row) as well as plates that had no rerun. 
+The data frame is saved in a .rds file called "dataset_project.rds" and 
+a list (i.e., Output report called "summaryList.RData").
+
+```{r demo-checkrerun}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#Call R function
+check_rerun_in_filename_structure(dataName = dataset_project)
+tmp <- read_rds("./rds/dataset_project.rds")
+#View
+tmp
+#View
+unique(tmp$KitName)
+#Load list
+load("./output/summaryList.RData")
+#View
+summaryList$Files$max_platenumber_rerun
+#Remove
+rm("summaryList")
+#Remove
+rm(dataset_project)
+```
+
+# ------------------------------------------------------------
+
+# Pipeline: Check instrument names
+
+Aim: Check whether the instrument name of the raw Luminex data is the same as the
+input instrument name (i.e., "instrument_name") in the metadata.
+
+Output: It returns a message (printed to the screen) informing the user if the 
+instrument_name is the same as the expected instrument_name, or not.
+
+Output Report: Save the message in the summary list report
+(i.e., "summaryList.RData").
+
+```{r demo-checkinstrumentname}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#check number of parts = redundant
+#check instrument names
+#Call R function
+check_instrument_name(dataName = dataset_project,
+                      instrument_name = metadata$tech$instrument_names)
+#Load list
+load("./output/summaryList.RData")
+#View
+summaryList$InstrumentName_errors
+#Remove
+rm("summaryList")
+```
+
+# ------------------------------------------------------------
+
+# Pipeline: Check dates
+
+Aim: Check date format in the "Date" variable
+
+Output: A list of "Correctly parsed unique dates" and "Incorrectly parsed
+dates" is returned and saved in the output report called "summaryList".
+
+Please note, i) a warning message will be given for the 7 "element values"
+that failed to parse.
+ii) save correct dates and the incorrect element values in the output 
+report called "summaryList".
+```{r demo-checkdates}
+#Call R function
+check_dates_filename(dataName = dataset_project)
+#Load list
+load("./output/summaryList.RData")
+#View
+str(summaryList$Dates)
+#View
+summaryList$Dates
+#Remove
+rm("summaryList")
+#Remove
+rm(dataset_project)
+```
+# -------------------------------------------------------------
+
+# Pipeline: # Clean variable names
+
+Aim: Standardise all variable (column) names to lowercase and replace symbols 
+with underscores as separators in the variable names. Remove white space at 
+the start and end of the variable name. Discards all the variables with "NA" 
+(i.e., that is NA). Also, show variables that have been removed 
+(i.e., save to "summaryList"). The changes are saved in the .rds file 
+called "dataset_project.rds" and in the output report called 
+"summaryList.RData".
+
+Output: A data frame \code{dataName} with all the variable names 
+standardized. Changed all variable names to lowercase and 
+replace symbols with underscores as separators in the variable names. 
+Remove white space at the start and end of the variable name. 
+Discards all the variables with "NA's" (i.e., that is NA). Also, show the
+variables that have been removed.The changes are saved in the .rds file 
+called "dataset_project.rds" and in the output report called 
+"summaryList.RData".
+
+```{r demo-cleancolnames}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+tmp <- tibble(orig = names(dataset_project),
+              new = NA)
+#Call R function
+clean_colnames(dataName = dataset_project)
+#Remove
+rm(dataset_project)
+#Read .rds (i.e., "dataset_project.rds") file the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+tmp$new <- names(dataset_project)
+#Remove
+rm(dataset_project)
+```
+
+# --------------------------------------------------------------
+
+# Pipeline: # Clean analyte names
+
+Aim: Standardised analyte names (i.e., consensus).
+
+Output: A data frame \code{dataName} with standardized analyte names.
+
+Add the unique analyte names that are present in the raw Luminex
+data and not present in the Analyte Reference Table to a list
+called "summaryList" (i.e., "summaryList.RData"). Save the dataset
+(i.e., the raw Luminex data) containing the standardized analyte
+names in a .rds file called "dataset_project.rds".
+
+```{r demo-cleananalytenames}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#View
+unique(dataset_project$analyte)
+
+# Read in analyte reference table (i.e., "analyte_synonyms.csv").
+ref <- read_delim("C:/Users/ncite/demoLuminexPipeline/demoLuminexPipeline/inst/extdata/analyte_synonyms20230525v05.csv",
+                  show_col_types = FALSE)
+
+#Call R function
+clean_analyte(dataName = dataset_project)
+
+#Read .rds (i.e., "dataset_project.rds") file the individual observed 
+#concentration values table as "dataset_project" object
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#View
+unique(dataset_project$analyte_new)
+#Remove
+rm(dataset_project)
+#Load list
+load("./output/summaryList.RData")
+#View
+summaryList$Analytes$not_in_analyte_ref
+#Remove
+rm("summaryList")
+```
+
+# ---------------------------------------------------------------
+
+# Pipeline: # Clean description names
+
+Aim: Standardised description names (i.e., specimen ID's).
+Change all the description names to lower case and replace all the 
+spaces with nothing.
+
+Output: A data frame \code{dataName} with standardized description names. All 
+the description names have been changed to lower case and all the spaces 
+have been replaced with nothing.
+
+Save the dataset (i.e., the raw Luminex data) containing the 
+standardized description names in a .rds file called 
+"dataset_project.rds".
+# ?? clean Description
+# How to automate that
+
+```{r demo-cleandescript}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#Call R function
+clean_description(dataName = dataset_project)
+#Remove
+rm(dataset_project)
+#Read .rds (i.e., "dataset_project.rds") file the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#View
+dim(dataset_project)
+#Total number of distinct (i.e., unique) description names.
+unique(dataset_project$description) %>% length()
+```
+
+# --------------------------------------------------------------
+
+# Pipeline: # Remove symbols
+
+Aim: Classify missing data and add metadata variables, as well as, remove 
+symbols.
+
+Output: A data frame (tibble) containing six new variables, namely:
+meta_trueMissing, meta_ThreeStar indicating no data is present, 
+meta_OneStar indicating extrapolation value, meta_OORgt indicating OOR 
+greater than, meta_OORlt indicating OOR less than, and Obs.Conc.numerics
+containing the observed concentration measurement (i.e., number).
+
+The data frame is saved in a RDS file called "dataset_project.rds" 
+(i.e., "rds/dataset_project.rds").
+
+```{r demo-removesymbols}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#Call R function
+remove_symbols(dataName = dataset_project)
+#Remove
+rm(dataset_project)
+#Read .rds (i.e., "dataset_project.rds") file the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#View
+dim(dataset_project)
+#View
+dataset_project %>%
+  select(contains("meta")) %>%
+  distinct()
+```
+
+# -----------------------------------------------------------------
+# Pipeline: # Check the number of analytes per kit (only), the total number of 
+plates per kit (only), visualize the total number of analytes per 
+kit and plate number, and the total number of analytes used in 
+the study.
+
+Aim: Count the **total number of analytes per kit (only)**, the **total number 
+#    of plates per kit (only), the **total number of analytes per kit and plate 
+#    number**, and the **total number of analytes** used in the study.
+
+Output: A tibble filtered for unknown specimens (i.e., X). Containing 
+i) the **total number of analytes per kit (only)**, ii) the
+**total number of plates per kit (only)**, iii) figures of the
+**total number of analytes per kit and plate number**, and iv) the 
+**total number of analytes used in the study**. The above information 
+is saved in the output report called "summaryList" 
+(i.e., "summaryList.RData").
+
+```{r demo-analytecount}
+#Read .rds (i.e., "dataset_project.rds") file the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#Call R function
+total_analytes_per_kit(dataName = dataset_project)
+#Load list
+load("./output/summaryList.RData")
+#Remove
+rm("summaryList")
+```
+
+# -----------------------------------------------------------------
+# Pipeline: # Split the raw Luminex data set (i.e., "dataset_project.rds") into 
+# quality control data set (QC) and participant data set 
+# (i.e., "dataset_prtcpt.rds"). In addition, add time point information from
+# the metadata file.
+
+Aim: Split the raw Luminex data set (i.e., "dataset_project.rds") into 
+# quality control data set (QC) and participant data set 
+# (i.e., "dataset_prtcpt.rds"). In addition, add time point information from
+# the metadata file.
+
+Output: Two data frames from the "dataset_project" data frame, namely,
+i) QC data set (i.e., "dataset_qc") and ii) participant data set
+(i.e., "dataset_prtcpt") are returned. These data sets contain selected 
+variables and unique rows for the participant dataset (i.e., "dataset_prtcpt") for
+further data pre-processing in the demoLuminexPipeline.
+
+The two data frames (i.e., "dataset_prtcpt" and "dataset_qc") are saved
+in RDS files called "rds/dataset_project.rds" and "rds/dataset_qc.rds".
+
+```{r demo-participant}
+#Read .rds (i.e., "dataset_project.rds") file of the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+#Call R function
+split_qc_prtcpt(dataName = dataset_project)
+#Read .rds (i.e., "dataset_project.rds") file the individual observed 
+#concentration values table as "dataset_project" object.
+dataset_prtcpt <- read_rds("./rds/dataset_prtcpt.rds")
+#Read .rds (i.e., "dataset_qc.rds") file the qc table as "dataset_qc" object.
+dataset_qc <- read_rds("./rds/dataset_qc.rds")
+```
+# -----------------------------------------------------------------
+
+# Continue with the dataset_prtcpt data set (i.e., "rds/dataset_prtcpt.rds").
+
+# ----------------------------------------------------------------
+# Pipeline: # Identify and remove (delete) true duplicates.
+
+# duplicates annotate
+
+# Different types of duplicates:
+# reruns
+# technical replicates
+# time points
+# true duplicates
+
+Aim: Identify and remove (delete) true duplicates, these are rows
+that are repeated for the same observations (elements).
+
+In addition, check for reruns that are not successfully excluded.
+These are specimens that have the same "kitname, instrumentname, date,
+platenumber, **well**, description, timepoint, stimulation, and
+**analyte_new** (i.e., analyte name)" variables.
+
+Remove duplicates from "dataset_prtcpt" data set and save in an object called
+"tmp". Bind maximum rerun elements in the "tmp1" object to the "dataset_prtcpt"
+data set. These are maximum rerun duplicates sliced from the "tmp" data frame
+and saved in the "tmp1" data frame.
+
+#"duplicates, Well included".
+Duplicates identified for the same "Study_Group".
+Add a new variable called "Duplicated_well" that will help when viewing
+missing values in the dataset by filtering for the observations in the
+dataset that does not have a duplicated well (i.e., no "Duplicated_well")
+before applying the vis_miss() R function from the visdat R package to 
+visualise missing values.
+
+#"duplicates, technical replicates".
+Identify and save all the technical replicates in an object.
+Technical replicates are the same specimen (i.e., Blanks (B), Standards (S)
+, Controls (QC), and Unknowns (X)) that are present on the same plate more
+than once (e.g., duplicates, triplicates) of which the average (i.e., mean)
+values are calculated and taken further.
+
+#"duplicates, the same analyte in different kits".
+Add a variable (i.e., "Duplicated_analyte_in_diff_kits") to indicate that
+the same analyte is present in different kits in the "dataset_prtcpt"
+data set.
+
+Output: The technical replicates are saved in the output report called 
+"summaryList" (i.e., "summaryList.RData").
+
+Save the participant dataset (i.e., "dataset_prtcpt") with no duplicates
+, but with technical replicates in a RDS file called 
+"dataset_prtcpt.rds".
+
+```{r demo-duplicateparticipant}
+#Read .rds (i.e., "dataset_prtcpt.rds") file of the participants individual 
+#observed concentration values table as "dataset_prtcpt" object.
+dataset_prtcpt <- read_rds("./rds/dataset_prtcpt.rds")
+#Call R function
+duplicates_annotate(dataset_prtcpt = dataset_prtcpt)
+#Load list
+load("./output/summaryList.RData")
+#View
+summaryList$Observations[[1]] %>%
+  filter(replicate_unexpected == "yes")
+#Remove
+rm("summaryList")
+#Remove
+rm(dataset_prtcpt)
+#Read .rds (i.e., "dataset_project.rds") file the individual observed 
+#concentration values table as "dataset_project" object
+dataset_prtcpt <- read_rds("./rds/dataset_prtcpt.rds")
+#View
+dataset_prtcpt %>%
+  select(description, duplicated_well, replicate_unexpected) %>%
+  filter(replicate_unexpected == "yes")
+```
+
+#----------------------------------------------------------------
+# Pipeline: # Visualise missingness (missing values) in the data
+
+# Missing values
+
+Aim: Plots of the unique participant data set and all the combinations of the
+factor variables (i.e., "Timepoint" variable and "Stimulation" variable)
+are generated to visualise missing data of the combinations of the factor
+variables (i.e., "Timepoint" variable and "Stimulation" variable).
+
+Determine the total number of unknown specimens (i.e., "X")
+per analyte, per kit and per plate for
+the actual Luminex experiment.
+
+Determine the proportions of different types of missing values, namely: 
+i) out of range less than (i.e., prop_OORlt), ii) out of range
+greater than (i.e., prop_OORgt), and iii) true missing values, these are
+missing values due to no read (i.e., prop_true_missing).
+
+Output: The plots showing the missing values of the factor variables, i.e., 
+"Timepoint" and the "Stimulation" condition 
+(i.e., "Timepoint" variable and "Stimulation" variable) are saved in the 
+output report called "summaryList" (i.e., "summaryList.RData").
+
+A data frame (i.e., object) containing an ordered 
+plot of the total number of unknown specimen (i.e., "X") per analyte, 
+per kit and per plate number (i.e., design of the experiment) for the 
+actual Luminex experiment is saved in the output report called 
+"summaryList" (i.e., "summaryList.RData").
+
+Additionally, a data frame (i.e., object) containing the 
+proportions of the different types of missing values (i.e., prop_OORlt,
+prop_OORgt, or prop_true_missing) is saved in the output report called 
+"summaryList" (i.e., "summaryList.RData").
+
+```{r demo-missingness}
+#Read .rds (i.e., "dataset_prtcpt.rds") file of the participants individual 
+#observed concentration values table as "dataset_prtcpt" object
+dataset_prtcpt <- read_rds("./rds/dataset_prtcpt.rds")
+#Call R function
+visualise_na_wideformat(dataset_prtcpt = dataset_prtcpt,
+                        metadataset = metadata$timepoints)
+#Call R function
+x_wells_per_kit_per_plate(dataset_prtcpt = dataset_prtcpt)
+#Call R function
+missing_proportions(dataset_prtcpt = dataset_prtcpt)
+#Load list
+load("./output/summaryList.RData")
+#View
+summaryList$Missingness
+#Remove
+rm("summaryList")
+```
+# -----------------------------------------------------------------
+# Pipeline: # Impute OOR below (<) and OOR above (>) values
+
+# Impute
+
+Aim: Impute OOR below (<) and OOR above (>) values with a 0.0001 fraction of
+the range of a particular analyte.
+
+Output: The imputed participant data set is saved in a RDS file called:
+"dataset_prtcpt.rds".
+
+```{r demo-impute}
+#Call R function
+replace(dataset_prtcpt = dataset_prtcpt)
+#Read .rds (i.e., "dataset_prtcpt.rds") file of the participants individual 
+#observed concentration values table as "dataset_prtcpt" object
+dataset_prtcpt <- read_rds("./rds/dataset_prtcpt.rds")
+#View
+dataset_prtcpt %>%
+  select(contains("conc")) %>%
+  filter(is.na(obs_conc_numerics))
+```
+
+# -------------------------------------------------------------------
+# Pipeline: # Replicates collapse to mean imputed observed concentration values
+
+# Collapse technical replicates
+
+Aim: Determine the mean observed concentration for the replicated
+imputed observed concentration values and save in a new variable 
+(i.e., called "Obs_Conc_Impute").
+
+Output: A RDS file (i.e., "rds/dataset_prtcpt_mean_conc.rds") consisting of the 
+#' participant data set (i.e., "dataset_prtcpt") with the mean observed
+#  concentration for the imputed observed concentration values
+#  (i.e., "obs_conc_impute" variable).
+
+```{r demo-replicates}
+# collapse technical replicates
+#Read .rds (i.e., "dataset_prtcpt.rds") file of the participants individual 
+#observed concentration values table as "dataset_prtcpt" object
+dataset_prtcpt <- read_rds("./rds/dataset_prtcpt.rds")
+#Call R function
+replicates_collapse(dataset_prtcpt = dataset_prtcpt)
+#Read .rds (i.e., "dataset_prtcpt_mean_conc.rds") file of the participants 
+#mean individual observed concentration values table as 
+#"dataset_prtcpt_mean_conc" object
+dataset_prtcpt_mean_conc <- read_rds("./rds/dataset_prtcpt_mean_conc.rds")
+#View
+dataset_prtcpt_mean_conc %>% 
+  group_by(description, timepoint, analyte_new) %>% 
+  count() %>% 
+  filter(n != 1) %>% 
+  inner_join(dataset_prtcpt_mean_conc) %>% 
+  select(description, timepoint, analyte_new, instrumentname,
+         kitname)
+```
+
+# -------------------------------------------------------------------
+
+# Transformations
+
+# later
+
+# ---------------------------------------------------------------
+
+# Summary stats and visualise
+
+# ---------------------------------------------------------------
+
+# Measure run time.
+#End time.
+```{r demo-time-end}
+end_time <- Sys.time()
+time_taken <- round(end_time - start_time,2)
+time_taken
+#Capture in summaryList
+#Output report: Save the run time in the summary list report
+#(i.e., "summaryList.RData")
+load("./output/summaryList.RData")
+summaryList[["RunTime"]] <- time_taken
+save(summaryList, file = "./output/summaryList.RData")
+```
+# ---------------------------------------------------------------
+# R session information
+
+Aim: Capture the R session information, the operating system (OS) information,
+and the loaded R packages information.
+
+Output: The R session information is saved in an object called "summaryList" and 
+a .RData file called "summaryList.RData".
+```{r demo-sessioninfo}
+#Output Report: Save the session information in the summary list report.
+#(i.e., "summaryList.RData")
+# load("summaryList.RData")
+summaryList[["session_information"]] <- sessionInfo()
+#Output Report: Save the above information that is saved in a data frame
+#in the summary list report (i.e., "summaryList.RData").
+save(summaryList, file = "./output/summaryList.RData")
+```
+
+# ---------------------------------------------------------------
+# Pipeline: # SummaryList report (summaryList)
+
+Aim: Document the data pre-processing steps done to the raw Luminex data in 
+the demoLuminexPipeline in a list (i.e., called "summaryList") and save the steps 
+as elements in the list to use as an output report, known as the 
+"summaryList report". 
+
+Output: The "summaryList report" is saved in an object called "summaryList" and 
+a .RData file called "summaryList.RData".
+```{r demo-save}
+# ---------------------------------------------------------------
+# Save summaryList according to investigation name
+#investigation.
+#Read .rds files.
+dataset_project <- read_rds("./rds/dataset_project.rds")
+dataset_prtcpt <- read_rds("./rds/dataset_prtcpt.rds")
+dataset_qc <- read_rds("./rds/dataset_qc.rds")
+#Write .rds files.
+readr::write_rds(dataset_project, file = paste("./rds/dataset_project_", investigation, ".rds", sep = ""))
+readr::write_rds(dataset_prtcpt, file = paste("./rds/dataset_prtcpt_", investigation, ".rds", sep = ""))
+readr::write_rds(dataset_qc, file = paste("./rds/dataset_qc_", investigation, ".rds", sep = ""))
+#Capture investigation name in summaryList
+#Output report: Save the run time in the summary list report
+#(i.e., "summaryList.RData")
+#Remove when done (i.e., after comparing reference data with demoLuminexPipeline output: "summaryList_Levin.RData" compared with "summaryList.RData")
+save(summaryList, file = sprintf("./output/summaryList_%s_%s.RData", investigation, user))
+save(summaryList, file = "./output/summaryList.RData")
+#.RDS file
+saveRDS(summaryList, file = "./rds/summaryList.rds")
+saveRDS(summaryList, file = paste("./rds/summaryList_", investigation, ".rds", sep = ""))
+```
+
+# ---------------------------------------------------------------
+# Pipeline: # QC report (summaryList)
+
+# QC report
+
+Aim: A selection of the documented data pre-processing steps in the 
+"summaryList report" is shown in the QC report. Steps (i.e., data 
+pre-processing or checks) done to the raw Luminex data in the demoLuminexPipeline. 
+
+Output: A HTML file called: "QCreport_summaryList.html" is generated and serve 
+as the output report of the demoLuminexPipeline.
+
+```{r demo-qcreport}
+# QC report  (summaryList)
+base_report <- "QCreport_summaryList.Rmd"
+base_report1 <- base_report
+base_report <- gsub("\\.Rmd", "", base_report)
+base_report <- sprintf("%s_%s_%s.Rmd", base_report, investigation, user)
+base_report <- sprintf("./output/%s", base_report)
+#Make a copy of original .Rmd file (i.e., line 1079)
+file.copy("QCreport_summaryList.Rmd", base_report, overwrite = TRUE)
+#Render (i.e., Knit .Rmd file)
+#rmarkdown::render(base_report)
+# reportrmd <- system.file("templates", "QCreport_summaryList_R01AI128765.Rmd", package = "demoLuminexPipeline")
+# file.copy(reportrmd, "QCreport_summaryList_R01AI128765.Rmd")
+# rmarkdown::render("QCreport_summaryList_R01AI128765.Rmd")
+reportrmd <- system.file("templates", base_report1, package = "demoLuminexPipeline")
+file.copy(reportrmd, base_report)
+rmarkdown::render(base_report)
+```
+
+# ---------------------------------------------------------------
+# Pipeline: # Test report (summaryList)
+
+# Test report
+
+Aim: Generate a test report to validate the demoLuminexPipeline (i.e., automated data 
+pre-processing steps done to the raw Luminex data). By comparing the 
+expected vs the observed outcomes of the data pre-processing steps 
+done to the raw Luminex data. 
+
+Output: A test report in a HTML file called: "Testreport_summaryList.html" is generated that summarise i) the run time of the reference run and 
+the test run by the analyst using the reference data specific to an 
+investigation (e.g., R01AI128765 study).
+ii) a summary table showing the match status of the data pre-processing 
+steps (i.e., elements) of the reference run and the test run by the 
+analyst (i.e., the status of the comparison between the whole 
+reference pre-processed Luminex data set to the whole pre-processed 
+Luminex data set from the analyst, study investigator, or data owner) 
+using the reference data specific to an investigation 
+(e.g., the R01AI128765 study).
+iii) a summary table showing the data pre-processing steps (i.e., elements) 
+that did not match, also known as "false outcome(s)", of the reference run 
+and the test run by the analyst using reference data specific to an 
+investigation (e.g., the R01AI128765 study).
+iv) the status of the comparison between the pre-processed Luminex data 
+sets (i.e., the reference vs the pre-processed data set by the analyst) of
+1. the whole data sets, 2. the participant data sets, 3. the QC data sets, 
+2. and 4. the R session information under which these data sets were ran.
+v) the entire R session information of the analyst and the reference.
+
+```{r demo-testreport-summary}
+# Test report  (summaryList)
+base_report <- "Testreport_summaryList.Rmd"
+base_report1 <- base_report
+base_report <- gsub("\\.Rmd", "", base_report)
+base_report <- sprintf("%s_%s_%s.Rmd", base_report, investigation, user)
+base_report <- sprintf("./output/%s", base_report) 
+#Make a copy of original .Rmd file (i.e., line 1079)
+file.copy("Testreport_summaryList.Rmd", base_report, overwrite = TRUE)
+#Render (i.e., Knit .Rmd file)
+reportrmd <- system.file("templates", base_report1, package = "demoLuminexPipeline")
+file.copy(reportrmd, base_report)
+rmarkdown::render(base_report)
+```
+
+
+

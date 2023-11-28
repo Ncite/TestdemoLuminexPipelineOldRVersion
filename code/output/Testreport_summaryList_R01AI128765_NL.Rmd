@@ -1,0 +1,422 @@
+---
+#title: "Test report (summaryList)"
+author: "Ncite Da Camara"
+date: "02/05/2022"
+output: html_document
+---
+  
+```{r, echo=FALSE, results='asis'}
+title_var <- sprintf("%s: Test report (summaryList)", investigation)
+```
+
+---
+  title: "`r title_var`"
+---
+  
+  ```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+
+```{r}
+#Attach R package
+source("../load_libraries.R")
+```
+
+
+```{r, echo=FALSE}
+## Load summaryList of the raw Luminex data specific to investigation (e.g., R01AI128765, Nexgen, or MPH_HIV) run by the analyst, investigator, or data owner through the demoLuminexPipeline.
+
+# This step loads the summaryList of the raw Luminex data specific to the investigation (e.g., R01AI128765, Nexgen, or MPH_HIV) run by the analyst, investigator, or data owner through the demoLuminexPipeline.
+
+#Capture in summaryList
+
+#Run output by user (analyst) specific to investigation (e.g., R01AI128765, NexGen, MIP HIV).
+load("../output/summaryList.RData")
+
+b <- summaryList
+```
+
+```{r}
+investigation <- b$Investigation
+```
+
+# Date
+```{r, echo=FALSE, results='asis'}
+a <- date()
+```
+
+Date: `r paste(a)`
+
+
+```{r, echo=FALSE}
+
+## Load summaryList of the reference data specific to investigation (e.g., R01AI128765, Nexgen, or MPH_HIV).
+
+#This step loads the summaryList of the reference data specific to investigation (e.g., R01AI128765, Nexgen, or MPH_HIV).
+
+#Reference output specific to investigation (e.g., R01AI128765, NexGen, MIP HIV).
+#load("reference_summaryList_R01AI128765.RData")
+
+load(file = paste("../reference_datasets/reference_summaryList_", investigation, ".RData", sep = ""))
+a <- summaryList
+```
+
+
+# Run time {#runtime}
+```{r, echo=FALSE, results='asis'}
+a1 <-  a[['RunTime']]
+
+aa <- attr(a1, "units")
+
+# aa <- print(a1)
+# 
+# aa <- attr(aa, "units")
+
+b1 <- b[['RunTime']]
+
+bb <- attr(b1, "units")
+
+# bb <- print(b1)
+# 
+# bb <- attr(bb, "units")
+
+```
+
+Elapse time.
+The demoLuminexPipline took `r paste(a1, aa, sep = " ")` to run for the reference data specific to the `r investigation` study.
+
+The demoLuminexPipline took `r paste(b1, bb, sep = " ")` to run the raw Luminex data specific to the `r investigation` study run by the analyst, investigator, or data owner through the demoLuminexPipeline.
+
+
+## Summary table of the elements match status.
+
+The summaryList reference elements are compared with the summaryList elements of the analyst. A summary is shown in the table below. 
+When the elements match (i.e., the reference elements compared to the analyst elements of the summaryList) the outcome in the "identical" variable will be "TRUE". Alternatively, when the elements do not match the outcome in the "identical" variable will be "FALSE".
+
+```{r}
+#Output **what** (where) has been compared and **what** is the outcome (results).
+test_objects <- function(obja, objb, result_container = NULL, verbose = FALSE){
+  if(is.null(result_container)){
+    result_container <- tibble(
+      element = names(obja),
+      group = 1,
+      identical = NA
+    )
+  }else{
+    mx <- result_container %>% 
+      pull(group) %>% 
+      max()
+    mx <- mx + 1
+    result_container <- bind_rows(
+      result_container, 
+      tibble(
+        element = names(obja[[1]]),
+        group = mx,
+        identical = NA   
+      )
+    )
+  }
+  for (name in names(obja)) {
+    test_identical <- identical(obja[[name]], objb[[name]])
+    if(verbose == TRUE){
+      cat(
+        sprintf("%40s:\t%s\n",
+                name,
+                test_identical
+        )
+      )
+    }
+    result_container <- result_container %>% 
+      mutate(
+        identical = ifelse(
+          element == name,
+          test_identical,
+          identical
+        )
+      )
+    if(test_identical == FALSE){
+      test_objects(obja[[name]], objb[[name]], result_container = result_container)
+      #print(name)
+    }
+  }
+  return(result_container)
+}
+
+#Call R function
+
+
+test_result <- test_objects(a[c(-2, -12, -14)], b[c(-2, -12, -14)])
+
+```
+
+```{r results='asis'}
+
+test_result %>% 
+  knitr::kable(caption = "Summary table of the elements match status (i.e., identical or not) compared to the reference elements") %>% 
+  kableExtra::kable_styling(full_width = FALSE, position = "left")  %>% 
+  kableExtra::column_spec(3, color = "black", background = ifelse(test_result$identical == "FALSE", "red", "white"))
+
+```
+
+## Summary table of the elements that did not match, also known as 
+"FALSE outcome(s)".
+
+A summary table of the elements (i.e., data pre-processing steps) that did not match and the reason(s).
+
+```{r results='asis'}
+tmp <- test_result %>% 
+  filter(identical == FALSE)
+
+
+if(nrow(tmp) != 0){
+  tmp %>% 
+    knitr::kable(caption = "Summary table of elements that did not match to the reference elements.") %>% 
+    kableExtra::kable_styling(full_width = FALSE, position = "left")
+  
+  tmp <- test_result %>% 
+    filter(identical == FALSE) %>% 
+    pull(element)
+  
+  for (i in tmp){
+    print(a[[i]] %>% 
+            knitr::kable(caption = "Summary table of elements that did not match to the reference elements.") %>% 
+            kableExtra::kable_styling(full_width = FALSE, position = "left"))
+    
+    print(b[[i]] %>% 
+            knitr::kable(caption = "Summary table of elements that did not match to the reference elements.") %>% 
+            kableExtra::kable_styling(full_width = FALSE, position = "left"))
+  }
+  
+} else{
+  print("All the elements (i.e., data pre-processing steps) matched.")
+}
+
+
+
+```
+
+```{r results="asis", knit(text = unlist(kables))}
+# test_objects <- function(obja, objb, result_container = NULL, verbose = FALSE){
+#   if(is.null(result_container)){
+#     result_container <- tibble(
+#       element = names(obja),
+#       group = 1,
+#       identical = NA
+#     )
+#   }else{
+#     mx <- result_container %>% 
+#       pull(group) %>% 
+#       max()
+#     mx <- mx + 1
+#     result_container <- bind_rows(
+#       result_container, 
+#       tibble(
+#         element = names(obja[[1]]),
+#         group = mx,
+#         identical = NA   
+#       )
+#     )
+#   }
+#   for (name in names(obja)) {
+#     test_identical <- identical(obja[[name]], objb[[name]])
+#     if(verbose == TRUE){
+#       cat(
+#         sprintf("%40s:\t%s\n",
+#                 name,
+#                 test_identical
+#         )
+#       )
+#     }
+#     result_container <- result_container %>% 
+#       mutate(
+#         identical = ifelse(
+#           element == name,
+#           test_identical,
+#           identical
+#         )
+#       )
+#     if(test_identical == FALSE){
+#       (test_objects(obja[[name]], objb[[name]], result_container = result_container))
+#       print(
+#         tibble(
+#       element = name,
+#       identical = FALSE
+#     ) %>% 
+#       knitr::kable(caption = "Summary table of elements that did not match to the reference elements") %>% 
+#               kableExtra::kable_styling(full_width = FALSE)
+#     )
+#     }
+#   }
+#   return(result_container)
+# }
+# 
+# #Call R function
+# test_result <- test_objects(a, b)
+
+
+```
+
+```{r}
+# %>%
+#  knitr::kable(caption = "Summary table of elements that did not match to the reference elements") %>%
+#  kableExtra::kable_styling(full_width = FALSE)
+```
+
+
+```{r}
+# options(knitr.kable.NA = " vs ")
+# knitr::kable(list(test_result %>% 
+#                     mutate(`   `=NA), test_result), 
+#              caption = "Reference vs analyst outcome (result)")
+#   #  kableExtra::kable_styling(full_width = FALSE)
+# 
+# 
+# Number of variables?
+# next to each other.
+# or
+# underneath each other
+```
+
+## Compare the pre-processed Luminex data sets (i.e., the reference vs the pre-processed data set by the analyst).
+
+```{r}
+#Load the reference pre-processed data set.
+#Entire project Luminex data set.
+
+dataset_project_a <- readr::read_rds(file = paste("../reference_datasets/reference_dataset_project_", investigation, ".rds", sep = ""))
+
+#participant Luminex data set
+dataset_prtcpt_a <- readr::read_rds(file = paste("../reference_datasets/reference_dataset_prtcpt_", investigation, ".rds", sep = ""))
+
+
+#QC Luminex data set
+dataset_qc_a <- readr::read_rds(file = paste("../reference_datasets/reference_dataset_qc_", investigation, ".rds", sep = ""))
+
+```
+
+```{r}
+#Load the pre-processed data set.
+dataset_project_b <- readr::read_rds(file = paste("../rds/dataset_project_", investigation, ".rds", sep = ""))
+
+dataset_prtcpt_b <- readr::read_rds(file = paste("../rds/dataset_prtcpt_", investigation, ".rds", sep = ""))
+
+dataset_qc_b <- readr::read_rds(file = paste("../rds/dataset_qc_", investigation, ".rds", sep = ""))
+```
+
+## 1. Compare the pre-processed Luminex data sets (i.e., the whole data sets).
+(i.e., Compare the whole reference pre-processed Luminex data set to the 
+ whole pre-processed Luminex data set from the analyst, study investigator, or data owner).
+```{r}
+#Compare the pre-processed Luminex data sets (i.e., the whole data set)
+tmp <- identical(dataset_project_a, dataset_project_b) 
+
+tmp <- tibble(
+  object = tmp
+) 
+
+tmp %>% 
+  knitr::kable(caption = "Compare the pre-processed Luminex data sets (i.e., the whole pre-processed reference data set vs the whole pre-processed data set of the analyst).") %>%
+  kableExtra::kable_styling(full_width = TRUE, position = "left") %>% 
+  kableExtra::column_spec(1:ncol(tmp), color = "black", background = ifelse(tmp$object == "FALSE", "red", "green"))
+
+```
+
+## 2. Compare the pre-processed participant (prtcpt) Luminex data sets.
+(i.e., Compare the reference pre-processed prtcpt Luminex data sets to the 
+ pre-processed prtcpt Luminex data sets from the analyst, study investigator, or data owner).
+```{r}
+#Compare the pre-processed participant Luminex data sets.
+tmp <- identical(dataset_prtcpt_a , dataset_prtcpt_b)
+
+tmp <- tibble(
+  object = tmp
+)
+
+tmp %>% 
+  knitr::kable(caption = "Compare the pre-processed participant Luminex data sets.") %>%
+  kableExtra::kable_styling(full_width = TRUE, position = "left") %>% 
+  kableExtra::column_spec(1:ncol(tmp), color = "black", background = ifelse(tmp$object == "FALSE", "red", "green"))
+```
+
+## 3. Compare the pre-processed QC Luminex data sets.
+(i.e., Compare the reference pre-processed QC Luminex data sets to the pre-processed QC Luminex data sets from the analyst, study investigator, or data owner).
+```{r}
+#Compare the pre-processed QC Luminex data sets.
+tmp <- identical(dataset_qc_a , dataset_qc_b)
+
+tmp <- tibble(
+  object = tmp
+)
+
+tmp %>% 
+  knitr::kable(caption = "Compare the pre-processed QC Luminex data sets.") %>%
+  kableExtra::kable_styling(full_width = TRUE, position = "left") %>% 
+  kableExtra::column_spec(1:ncol(tmp), color = "black", background = ifelse(tmp$object == "FALSE", "red", "green"))
+```
+
+
+## 4. Compare R session information under which these data sets were ran.
+(i.e., reference pre-processed Luminex data sets vs pre-processed Luminex data sets from analyst, study investigator, or data owner).
+```{r}
+#Compare R session information of the data sets
+#Referenced pre-processed Luminex data set (i.e., a) and the analyst pre-processed Luminex data set (i.e., b).
+Rsessioninformation <- tibble(
+  R_session_information = c("R_version", "Platform", "Runnining_under", "Run_time"),
+  Reference = c(a$session_information$R.version$version.string, a$session_information$platform, a$session_information$running, a[['RunTime']]),
+  User_analyst = c(b$session_information$R.version$version.string, b$session_information$platform, b$session_information$running, b[['RunTime']])
+)
+
+Rsessioninformation %>% 
+  knitr::kable(caption = "Summary of the session information of the referenced pre-processed Luminex data set and the pre-processed Luminex data set run by the analyst.") %>%
+  kableExtra::kable_styling(full_width = TRUE, position = "left")
+
+```
+
+## New analyte names
+
+New analyte names that are present in the raw Luminex data and not present in the analyte reference table (i.e., "analyte_synonyms.csv").
+These new analyte names should be added to the analyte reference table (i.e., "analyte_synonyms.csv") after they have been assessed and approved by the Bioinformatics group investigators.
+
+```{r}
+tmp <- summaryList$not_in_analyte_ref
+
+if(!is.null(tmp)){
+  tmp <- tibble(
+    new_analyte_names <- summaryList$not_in_analyte_ref
+  )
+  
+  tmp %>% 
+    knitr::kable(caption = "New analyte names that should be added to the analyte reference table (i.e., analyte_synonyms.csv).") %>%
+    kableExtra::kable_styling(full_width = TRUE, position = "left")
+} else{
+  print("No new analyte names identified in the raw Luminex data that is not in the analyte reference table.")
+}
+
+```
+
+
+## R session information of the pre-processed Luminex data set analysed by the analyst, investigator, or data owner.
+
+Provide information of the R version, platform, operating system, etc. of the session (i.e., R session information during the demoLuminexPipeline run).
+Please note this is the analyst R session information.
+
+```{r, echo=FALSE}
+#Capture in summaryList
+#Run output by user (analyst) specific to investigation (e.g., R01AI128765, NexGen, MIP HIV).
+b$session_information
+
+readr::write_rds(b, "../rds/b.rds")
+```
+
+## R session information of the reference pre-processed Luminex data set.
+Provide information of the R version, platform, operating system, etc. of the session (i.e., R session information during the demoLuminexPipeline run).
+
+Please note this is the reference output R session information specific to the `r investigation` study.
+
+```{r, echo=FALSE}
+#Reference output specific to investigation (e.g., R01AI128765, NexGen, MIP HIV).
+a$session_information
+
+readr::write_rds(a, "../rds/a.rds")
+```
